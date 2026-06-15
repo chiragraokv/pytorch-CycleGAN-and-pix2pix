@@ -25,6 +25,7 @@ from data import create_dataset
 from models import create_model
 from util.visualizer import Visualizer
 from util.util import init_ddp, cleanup_ddp
+import wandb
 
 
 if __name__ == "__main__":
@@ -78,6 +79,11 @@ if __name__ == "__main__":
         model.update_learning_rate()  # update learning rates at the end of every epoch
 
         if epoch % opt.save_epoch_freq == 0:  # cache our model every <save_epoch_freq> epochs
+            try:
+                visualizer.save_model_to_wandb(epoch,model)
+            except Exception as e:
+                print("wandb model is not working")
+                wandb.log({"WARNING: MODEL LOGGING NOT WORKING"})
             print(f"saving the model at the end of epoch {epoch}, iters {total_iters}")
             model.save_networks("latest")
             model.save_networks(epoch)

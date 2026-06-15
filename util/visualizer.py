@@ -7,7 +7,7 @@ from pathlib import Path
 import wandb
 import os
 import torch.distributed as dist
-
+import torch
 
 def save_images(webpage, visuals, image_path, aspect_ratio=1.0, width=256):
     """Save images to the disk.
@@ -166,3 +166,28 @@ class Visualizer:
         if local_rank == 0:
             with open(self.log_name, "a") as log_file:
                 log_file.write(f"{message}\n")  # save the message
+
+    def save_model_to_wandb(self, epoch, model):
+        if not self.use_wandb:
+            return
+        gen1_path = f"gen_1_{epoch}.pth"
+        gen2_path = f"gen_2_{epoch}.pth"
+        dis1_path = f"dis_1_{epoch}.pth"
+        dis2_path = f"dis_2_{epoch}.pth"
+        
+        torch.save(model.netG_A.module.state_dict(), gen1_path)
+        torch.save(model.netG_B.module.state_dict(), gen2_path)
+        torch.save(model.netD_A.module.state_dict(), dis1_path)
+        torch.save(model.netD_B.module.state_dict(), dis2_path)
+
+        artifact = wandb.Artifact(
+            name=f"cyclegan_epoch_{epoch}",
+            type="model"
+        )
+
+        artifact.add_file(gen1_path)
+        artifact.add_file(gen2_path)
+        artifact.add_file(dis1_path)
+        artifact.add_file(dis2_path)
+
+        wandb.log_artifact(artifact)
