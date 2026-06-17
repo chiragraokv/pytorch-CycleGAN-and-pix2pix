@@ -26,7 +26,10 @@ from models import create_model
 from util.visualizer import Visualizer
 from util.util import init_ddp, cleanup_ddp
 import wandb
+import torch.distributed as dist
 
+def is_main():
+    return (not dist.is_initialized()) or dist.get_rank() == 0
 
 if __name__ == "__main__":
     opt = TrainOptions().parse()  # get training options
@@ -78,15 +81,24 @@ if __name__ == "__main__":
 
         model.update_learning_rate()  # update learning rates at the end of every epoch
 
-        if epoch % opt.save_epoch_freq == 0:  # cache our model every <save_epoch_freq> epochs
-            try:
-                visualizer.save_model_to_wandb(epoch,model)
-            except Exception as e:
-                print("wandb model is not working")
-                wandb.log({"WARNING: MODEL LOGGING NOT WORKING"})
-            print(f"saving the model at the end of epoch {epoch}, iters {total_iters}")
-            model.save_networks("latest")
-            model.save_networks(epoch)
+        if epoch % opt.save_epoch_freq == 0:
+            if is_main():
+                try:
+                    visualizer.save_model_to_wandb(epoch, model)
+
+                    print(f"saving the model at the end of epoch {epoch}, iters {total_iters}")
+                    model.save_networks("latest")
+                    model.save_networks(epoch)
+
+                except Exception as e:
+                    print("wandb model is not working:", e)
+
+                    # SAFE fallback (no wandb.log unless init is guaranteed)
+                    try:
+                        if wandb.run is not None:
+                            wandb.log({"warning_model_logging_failed": 1})
+                    except:
+                        pass
 
         print(f"End of epoch {epoch} / {opt.n_epochs + opt.n_epochs_decay} \t Time Taken: {time.time() - epoch_start_time:.0f} sec")
 
